@@ -1,0 +1,1685 @@
+<?xml version="1.0" encoding="utf-8"?>
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+  <External>null</External>
+  <External>nil</External>
+  <Item class="Workspace" referent="RBXF4A234D3">
+    <Properties>
+      <string name="Name">Workspace</string>
+    </Properties>
+  </Item>
+  <Item class="Players" referent="RBXF4A234D4">
+    <Properties>
+      <string name="Name">Players</string>
+    </Properties>
+  </Item>
+  <Item class="Lighting" referent="RBXF4A234D5">
+    <Properties>
+      <string name="Name">Lighting</string>
+    </Properties>
+  </Item>
+  <Item class="ReplicatedFirst" referent="RBXF4A234D6">
+    <Properties>
+      <string name="Name">ReplicatedFirst</string>
+    </Properties>
+  </Item>
+  <Item class="ReplicatedStorage" referent="RBXF4A234D7">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+      <Item class="ModuleScript" referent="RBX00000065">
+        <Properties>
+          <string name="Name">FightConfig</string>
+          <ProtectedString name="Source"><![CDATA[--[[
+	FightConfig - Shared constants for Pixel Brawl
+	LOCATION: ReplicatedStorage > FightConfig (ModuleScript)
+]]
+
+local Config = {}
+
+-- General
+Config.MAX_HEALTH = 100
+Config.ROUND_TIME = 60
+Config.ROUNDS_TO_WIN = 2
+Config.COUNTDOWN_TIME = 3
+Config.ROUND_END_DELAY = 3
+Config.MATCH_END_DELAY = 5
+
+-- Movement
+Config.MOVE_SPEED = 32
+Config.JUMP_FORCE = 50
+Config.ARENA_MIN_X = -50
+Config.ARENA_MAX_X = 50
+Config.GROUND_Y = 3 -- character feet Y position
+
+-- Block
+Config.BLOCK_REDUCTION = 0.25
+Config.BLOCK_KNOCKBACK_MULT = 0.3
+
+-- Attack data: { damage, range, startup, active, recovery, knockback, hitstun }
+-- Times in seconds
+Config.Attacks = {
+	punch = {
+		damage = 8,
+		range = 6,
+		startup = 0.05,
+		active = 0.07,
+		recovery = 0.13,
+		knockback = 6,
+		hitstun = 0.2,
+		isProjectile = false,
+	},
+	kick = {
+		damage = 14,
+		range = 8,
+		startup = 0.1,
+		active = 0.08,
+		recovery = 0.2,
+		knockback = 10,
+		hitstun = 0.3,
+		isProjectile = false,
+	},
+	special = {
+		damage = 20,
+		range = 0,
+		startup = 0.2,
+		active = 0,
+		recovery = 0.33,
+		knockback = 14,
+		hitstun = 0.35,
+		isProjectile = true,
+		projectileSpeed = 60,
+		projectileLifetime = 2,
+	},
+}
+
+-- State names
+Config.States = {
+	IDLE = "idle",
+	WALK = "walk",
+	JUMP = "jump",
+	PUNCH = "punch",
+	KICK = "kick",
+	SPECIAL = "special",
+	BLOCK = "block",
+	HITSTUN = "hitstun",
+	KO = "ko",
+}
+
+-- Game phases
+Config.Phases = {
+	WAITING = "waiting",
+	COUNTDOWN = "countdown",
+	FIGHTING = "fighting",
+	ROUND_END = "roundEnd",
+	MATCH_END = "matchEnd",
+}
+
+-- Remote event names
+Config.Remotes = {
+	SEND_INPUT = "SendInput",
+	GAME_STATE = "GameState",
+	GAME_EVENT = "GameEvent",
+}
+
+return Config
+]]></ProtectedString>
+        </Properties>
+      </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="RBXF4A234D8">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+      <Item class="Script" referent="RBX00000066">
+        <Properties>
+          <string name="Name">FightServer</string>
+          <ProtectedString name="Source"><![CDATA[--[[
+	FightServer - Main server script for Pixel Brawl
+	LOCATION: ServerScriptService > FightServer (Script)
+
+	Handles: matchmaking, game loop, combat, rounds, state broadcasting
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("FightConfig"))
+
+-- ============================================================
+-- CREATE REMOTE EVENTS
+-- ============================================================
+local remotesFolder = Instance.new("Folder")
+remotesFolder.Name = "FightRemotes"
+remotesFolder.Parent = ReplicatedStorage
+
+local sendInputEvent = Instance.new("RemoteEvent")
+sendInputEvent.Name = Config.Remotes.SEND_INPUT
+sendInputEvent.Parent = remotesFolder
+
+local gameStateEvent = Instance.new("RemoteEvent")
+gameStateEvent.Name = Config.Remotes.GAME_STATE
+gameStateEvent.Parent = remotesFolder
+
+local gameEventEvent = Instance.new("RemoteEvent")
+gameEventEvent.Name = Config.Remotes.GAME_EVENT
+gameEventEvent.Parent = remotesFolder
+
+-- ============================================================
+-- CREATE ARENA (programmatically if not in workspace)
+-- ============================================================
+local function setupArena()
+	local arena = workspace:FindFirstChild("Arena")
+	if not arena then
+		arena = Instance.new("Folder")
+		arena.Name = "Arena"
+		arena.Parent = workspace
+
+		-- Floor
+		local floor = Instance.new("Part")
+		floor.Name = "Floor"
+		floor.Size = Vector3.new(120, 2, 20)
+		floor.Position = Vector3.new(0, -1, 0)
+		floor.Anchored = true
+		floor.Material = Enum.Material.SmoothPlastic
+		floor.BrickColor = BrickColor.new("Dark stone grey")
+		floor.Parent = arena
+
+		-- Left wall
+		local wallL = Instance.new("Part")
+		wallL.Name = "WallLeft"
+		wallL.Size = Vector3.new(2, 40, 20)
+		wallL.Position = Vector3.new(Config.ARENA_MIN_X - 1, 19, 0)
+		wallL.Anchored = true
+		wallL.Transparency = 1
+		wallL.CanCollide = true
+		wallL.Parent = arena
+
+		-- Right wall
+		local wallR = Instance.new("Part")
+		wallR.Name = "WallRight"
+		wallR.Size = Vector3.new(2, 40, 20)
+		wallR.Position = Vector3.new(Config.ARENA_MAX_X + 1, 19, 0)
+		wallR.Anchored = true
+		wallR.Transparency = 1
+		wallR.CanCollide = true
+		wallR.Parent = arena
+	end
+	return arena
+end
+
+local arena = setupArena()
+
+-- ============================================================
+-- MATCHMAKING
+-- ============================================================
+local queue = {} -- players waiting for a match
+local activeMatches = {} -- matchId -> match data
+
+local function createFighterState(player, spawnX, facingRight)
+	return {
+		player = player,
+		x = spawnX,
+		y = Config.GROUND_Y,
+		vx = 0,
+		vy = 0,
+		health = Config.MAX_HEALTH,
+		state = Config.States.IDLE,
+		stateTimer = 0,
+		facingRight = facingRight,
+		attackHit = false,
+		roundWins = 0,
+		input = {
+			left = false, right = false, jump = false,
+			block = false, punch = false, kick = false, special = false,
+		},
+		prevInput = {},
+		onGround = true,
+	}
+end
+
+local function createMatch(player1, player2)
+	local matchId = tostring(tick()) .. "_" .. player1.UserId
+	local match = {
+		id = matchId,
+		phase = Config.Phases.COUNTDOWN,
+		fighters = {
+			createFighterState(player1, -30, true),
+			createFighterState(player2, 30, false),
+		},
+		timer = Config.COUNTDOWN_TIME,
+		roundTimer = Config.ROUND_TIME,
+		currentRound = 1,
+		projectiles = {},
+		phaseTimer = Config.COUNTDOWN_TIME,
+	}
+	activeMatches[matchId] = match
+
+	-- Tell clients the match started
+	gameEventEvent:FireClient(player1, "matchStart", {
+		matchId = matchId,
+		playerIndex = 1,
+		opponentName = player2.Name,
+	})
+	gameEventEvent:FireClient(player2, "matchStart", {
+		matchId = matchId,
+		playerIndex = 2,
+		opponentName = player1.Name,
+	})
+
+	-- Teleport characters
+	local char1 = player1.Character
+	local char2 = player2.Character
+	if char1 and char1:FindFirstChild("HumanoidRootPart") then
+		char1.HumanoidRootPart.CFrame = CFrame.new(-30, Config.GROUND_Y + 3, 0)
+		char1.HumanoidRootPart.Anchored = false
+	end
+	if char2 and char2:FindFirstChild("HumanoidRootPart") then
+		char2.HumanoidRootPart.CFrame = CFrame.new(30, Config.GROUND_Y + 3, 0)
+		char2.HumanoidRootPart.Anchored = false
+	end
+
+	-- Disable default humanoid health
+	for _, f in ipairs(match.fighters) do
+		local char = f.player.Character
+		if char then
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			if hum then
+				hum.MaxHealth = math.huge
+				hum.Health = math.huge
+			end
+		end
+	end
+
+	return match
+end
+
+local function tryMatchmaking()
+	-- Remove disconnected players from queue
+	for i = #queue, 1, -1 do
+		if not queue[i].Parent then
+			table.remove(queue, i)
+		end
+	end
+
+	while #queue >= 2 do
+		local p1 = table.remove(queue, 1)
+		local p2 = table.remove(queue, 1)
+
+		-- Verify both still connected and have characters
+		if p1.Parent and p2.Parent and p1.Character and p2.Character then
+			createMatch(p1, p2)
+		else
+			-- Put back whoever is still valid
+			if p1.Parent and p1.Character then table.insert(queue, p1) end
+			if p2.Parent and p2.Character then table.insert(queue, p2) end
+		end
+	end
+end
+
+local function getMatchForPlayer(player)
+	for matchId, match in pairs(activeMatches) do
+		for i, f in ipairs(match.fighters) do
+			if f.player == player then
+				return match, i
+			end
+		end
+	end
+	return nil, nil
+end
+
+local function isInMatch(player)
+	return getMatchForPlayer(player) ~= nil
+end
+
+-- ============================================================
+-- COMBAT LOGIC
+-- ============================================================
+
+local function applyPhysics(fighter, dt)
+	fighter.x = fighter.x + fighter.vx * dt
+	fighter.y = fighter.y + fighter.vy * dt
+
+	-- Gravity
+	if fighter.y > Config.GROUND_Y then
+		fighter.onGround = false
+		fighter.vy = fighter.vy - 120 * dt
+	else
+		-- Simple ground: y increases upward in our logic, but Roblox Y is up
+		-- We'll treat y as the Roblox Y position of feet
+	end
+
+	-- Actually let's use Roblox-style Y (up is positive)
+	if not fighter.onGround then
+		fighter.vy = fighter.vy - 120 * dt -- gravity pulling down
+	end
+
+	if fighter.y <= Config.GROUND_Y and fighter.vy <= 0 then
+		fighter.y = Config.GROUND_Y
+		fighter.vy = 0
+		fighter.onGround = true
+	end
+
+	-- Friction during hitstun
+	if fighter.state == Config.States.HITSTUN then
+		fighter.vx = fighter.vx * (1 - 5 * dt)
+	end
+
+	-- Arena bounds
+	fighter.x = math.clamp(fighter.x, Config.ARENA_MIN_X + 2, Config.ARENA_MAX_X - 2)
+end
+
+local function checkHit(attacker, defender, attackData)
+	if defender.state == Config.States.KO then return end
+	if attacker.attackHit then return end
+
+	local dir = attacker.facingRight and 1 or -1
+	local hitX = attacker.x + dir * attackData.range
+	local dist = math.abs(hitX - defender.x)
+	local yDist = math.abs(attacker.y - defender.y)
+
+	if dist < 8 and yDist < 8 then
+		attacker.attackHit = true
+
+		if defender.state == Config.States.BLOCK then
+			-- Blocked
+			defender.health = defender.health - attackData.damage * Config.BLOCK_REDUCTION
+			defender.vx = dir * attackData.knockback * Config.BLOCK_KNOCKBACK_MULT
+			return "blocked"
+		else
+			-- Hit!
+			defender.health = defender.health - attackData.damage
+			defender.state = Config.States.HITSTUN
+			defender.stateTimer = attackData.hitstun
+			defender.vx = dir * attackData.knockback
+			defender.vy = 3
+			return "hit"
+		end
+	end
+	return nil
+end
+
+local function updateFighter(fighter, opponent, dt, match)
+	if fighter.state == Config.States.KO then return end
+
+	fighter.stateTimer = math.max(0, fighter.stateTimer - dt)
+	local input = fighter.input
+
+	-- Hitstun
+	if fighter.state == Config.States.HITSTUN then
+		if fighter.stateTimer <= 0 then
+			fighter.state = Config.States.IDLE
+		end
+		applyPhysics(fighter, dt)
+		return
+	end
+
+	-- Attack states
+	local attackName = nil
+	if fighter.state == Config.States.PUNCH then attackName = "punch"
+	elseif fighter.state == Config.States.KICK then attackName = "kick"
+	elseif fighter.state == Config.States.SPECIAL then attackName = "special"
+	end
+
+	if attackName then
+		local atk = Config.Attacks[attackName]
+		local totalTime = atk.startup + atk.active + atk.recovery
+		local elapsed = totalTime - fighter.stateTimer
+
+		-- Non-projectile hit check during active frames
+		if not atk.isProjectile then
+			if elapsed >= atk.startup and elapsed < atk.startup + atk.active and not fighter.attackHit then
+				local result = checkHit(fighter, opponent, atk)
+				if result then
+					-- Notify clients about hit
+					for _, f in ipairs(match.fighters) do
+						gameEventEvent:FireClient(f.player, result, {
+							x = opponent.x,
+							y = opponent.y,
+							attackType = attackName,
+						})
+					end
+				end
+			end
+		end
+
+		-- Projectile spawn
+		if atk.isProjectile and elapsed >= atk.startup and elapsed < atk.startup + dt * 2 then
+			local dir = fighter.facingRight and 1 or -1
+			table.insert(match.projectiles, {
+				x = fighter.x + dir * 4,
+				y = fighter.y + 3,
+				vx = dir * atk.projectileSpeed,
+				owner = fighter,
+				life = atk.projectileLifetime,
+				damage = atk.damage,
+				knockback = atk.knockback,
+				hitstun = atk.hitstun,
+			})
+			for _, f in ipairs(match.fighters) do
+				gameEventEvent:FireClient(f.player, "projectile", {
+					x = fighter.x + dir * 4,
+					y = fighter.y + 3,
+					dir = dir,
+				})
+			end
+		end
+
+		if fighter.stateTimer <= 0 then
+			fighter.state = Config.States.IDLE
+		end
+		applyPhysics(fighter, dt)
+		return
+	end
+
+	-- Block
+	if input.block and fighter.onGround then
+		fighter.state = Config.States.BLOCK
+		fighter.vx = 0
+	elseif fighter.state == Config.States.BLOCK and not input.block then
+		fighter.state = Config.States.IDLE
+	end
+
+	if fighter.state == Config.States.BLOCK then
+		applyPhysics(fighter, dt)
+		return
+	end
+
+	-- Jump
+	if input.jump and fighter.onGround then
+		fighter.vy = Config.JUMP_FORCE
+		fighter.y = fighter.y + 0.1
+		fighter.onGround = false
+		fighter.state = Config.States.JUMP
+	end
+
+	-- Movement
+	local moving = false
+	if input.left then
+		fighter.vx = -Config.MOVE_SPEED
+		moving = true
+	elseif input.right then
+		fighter.vx = Config.MOVE_SPEED
+		moving = true
+	else
+		fighter.vx = 0
+	end
+
+	-- State
+	if fighter.onGround and not moving and fighter.state ~= Config.States.JUMP then
+		fighter.state = Config.States.IDLE
+	elseif fighter.onGround and moving and fighter.state ~= Config.States.JUMP then
+		fighter.state = Config.States.WALK
+	end
+	if not fighter.onGround then
+		fighter.state = Config.States.JUMP
+	end
+
+	-- Attacks (on new press only)
+	local function newPress(key)
+		return input[key] and not fighter.prevInput[key]
+	end
+
+	if newPress("punch") then
+		local atk = Config.Attacks.punch
+		fighter.state = Config.States.PUNCH
+		fighter.stateTimer = atk.startup + atk.active + atk.recovery
+		fighter.attackHit = false
+		fighter.vx = 0
+		for _, f in ipairs(match.fighters) do
+			gameEventEvent:FireClient(f.player, "attack", { attackType = "punch", attacker = fighter == match.fighters[1] and 1 or 2 })
+		end
+	elseif newPress("kick") then
+		local atk = Config.Attacks.kick
+		fighter.state = Config.States.KICK
+		fighter.stateTimer = atk.startup + atk.active + atk.recovery
+		fighter.attackHit = false
+		fighter.vx = 0
+		for _, f in ipairs(match.fighters) do
+			gameEventEvent:FireClient(f.player, "attack", { attackType = "kick", attacker = fighter == match.fighters[1] and 1 or 2 })
+		end
+	elseif newPress("special") then
+		local atk = Config.Attacks.special
+		fighter.state = Config.States.SPECIAL
+		fighter.stateTimer = atk.startup + atk.active + atk.recovery
+		fighter.attackHit = false
+		fighter.vx = 0
+		for _, f in ipairs(match.fighters) do
+			gameEventEvent:FireClient(f.player, "attack", { attackType = "special", attacker = fighter == match.fighters[1] and 1 or 2 })
+		end
+	end
+
+	-- Face opponent
+	if opponent and fighter.state ~= Config.States.HITSTUN then
+		fighter.facingRight = fighter.x < opponent.x
+	end
+
+	-- Save prev input
+	fighter.prevInput = {}
+	for k, v in pairs(input) do
+		fighter.prevInput[k] = v
+	end
+
+	applyPhysics(fighter, dt)
+end
+
+local function updateProjectiles(match, dt)
+	local fighters = match.fighters
+	for i = #match.projectiles, 1, -1 do
+		local p = match.projectiles[i]
+		p.x = p.x + p.vx * dt
+		p.life = p.life - dt
+
+		if p.life <= 0 or p.x < Config.ARENA_MIN_X - 10 or p.x > Config.ARENA_MAX_X + 10 then
+			table.remove(match.projectiles, i)
+		else
+			-- Check hit against fighters
+			for _, f in ipairs(fighters) do
+				if f ~= p.owner and f.state ~= Config.States.KO then
+					local dist = math.abs(p.x - f.x)
+					local yDist = math.abs(p.y - f.y - 3)
+					if dist < 6 and yDist < 6 then
+						if f.state == Config.States.BLOCK then
+							f.health = f.health - p.damage * Config.BLOCK_REDUCTION
+							for _, ff in ipairs(fighters) do
+								gameEventEvent:FireClient(ff.player, "blocked", { x = p.x, y = p.y, attackType = "special" })
+							end
+						else
+							f.health = f.health - p.damage
+							f.state = Config.States.HITSTUN
+							f.stateTimer = p.hitstun
+							local dir = p.vx > 0 and 1 or -1
+							f.vx = dir * p.knockback
+							f.vy = 3
+							for _, ff in ipairs(fighters) do
+								gameEventEvent:FireClient(ff.player, "hit", { x = p.x, y = p.y, attackType = "special" })
+							end
+						end
+						table.remove(match.projectiles, i)
+						break
+					end
+				end
+			end
+		end
+	end
+end
+
+local function resetRound(match)
+	match.fighters[1].x = -30
+	match.fighters[1].y = Config.GROUND_Y
+	match.fighters[1].vx = 0
+	match.fighters[1].vy = 0
+	match.fighters[1].health = Config.MAX_HEALTH
+	match.fighters[1].state = Config.States.IDLE
+	match.fighters[1].stateTimer = 0
+	match.fighters[1].attackHit = false
+	match.fighters[1].facingRight = true
+	match.fighters[1].onGround = true
+
+	match.fighters[2].x = 30
+	match.fighters[2].y = Config.GROUND_Y
+	match.fighters[2].vx = 0
+	match.fighters[2].vy = 0
+	match.fighters[2].health = Config.MAX_HEALTH
+	match.fighters[2].state = Config.States.IDLE
+	match.fighters[2].stateTimer = 0
+	match.fighters[2].attackHit = false
+	match.fighters[2].facingRight = false
+	match.fighters[2].onGround = true
+
+	match.projectiles = {}
+	match.roundTimer = Config.ROUND_TIME
+
+	-- Teleport characters
+	for i, f in ipairs(match.fighters) do
+		local char = f.player.Character
+		if char and char:FindFirstChild("HumanoidRootPart") then
+			local spawnX = i == 1 and -30 or 30
+			char.HumanoidRootPart.CFrame = CFrame.new(spawnX, Config.GROUND_Y + 3, 0)
+			char.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+		end
+	end
+end
+
+local function endMatch(match)
+	local winner = match.fighters[1].roundWins >= Config.ROUNDS_TO_WIN and 1 or 2
+	local winnerName = match.fighters[winner].player.Name
+
+	for _, f in ipairs(match.fighters) do
+		gameEventEvent:FireClient(f.player, "matchEnd", {
+			winner = winner,
+			winnerName = winnerName,
+		})
+	end
+
+	match.phase = Config.Phases.MATCH_END
+	match.phaseTimer = Config.MATCH_END_DELAY
+
+	-- After delay, clean up and re-queue players
+	task.delay(Config.MATCH_END_DELAY + 1, function()
+		for _, f in ipairs(match.fighters) do
+			if f.player.Parent then
+				-- Respawn character
+				local char = f.player.Character
+				if char and char:FindFirstChild("Humanoid") then
+					char.Humanoid.MaxHealth = 100
+					char.Humanoid.Health = 100
+				end
+				f.player:LoadCharacter()
+				-- Re-queue
+				task.delay(1, function()
+					if f.player.Parent and not isInMatch(f.player) then
+						table.insert(queue, f.player)
+						gameEventEvent:FireClient(f.player, "queued", {})
+						tryMatchmaking()
+					end
+				end)
+			end
+		end
+		activeMatches[match.id] = nil
+	end)
+end
+
+-- ============================================================
+-- UPDATE MATCH
+-- ============================================================
+local function updateMatch(match, dt)
+	-- Check for disconnected players
+	for i, f in ipairs(match.fighters) do
+		if not f.player.Parent then
+			local other = match.fighters[i == 1 and 2 or 1]
+			if other.player.Parent then
+				other.roundWins = Config.ROUNDS_TO_WIN
+				endMatch(match)
+			else
+				activeMatches[match.id] = nil
+			end
+			return
+		end
+	end
+
+	if match.phase == Config.Phases.COUNTDOWN then
+		match.phaseTimer = match.phaseTimer - dt
+		if match.phaseTimer <= 0 then
+			match.phase = Config.Phases.FIGHTING
+			for _, f in ipairs(match.fighters) do
+				gameEventEvent:FireClient(f.player, "fight", {})
+			end
+		end
+
+	elseif match.phase == Config.Phases.FIGHTING then
+		-- Update timer
+		match.roundTimer = match.roundTimer - dt
+		if match.roundTimer <= 0 then match.roundTimer = 0 end
+
+		-- Update fighters
+		local f1 = match.fighters[1]
+		local f2 = match.fighters[2]
+		updateFighter(f1, f2, dt, match)
+		updateFighter(f2, f1, dt, match)
+
+		-- Update projectiles
+		updateProjectiles(match, dt)
+
+		-- Sync character positions to Roblox characters
+		for _, f in ipairs(match.fighters) do
+			local char = f.player.Character
+			if char and char:FindFirstChild("HumanoidRootPart") then
+				local hrp = char.HumanoidRootPart
+				-- Force 2D: set position, lock Z to 0
+				local targetCF = CFrame.new(f.x, f.y + 3, 0)
+				-- Face direction
+				if f.facingRight then
+					targetCF = targetCF * CFrame.Angles(0, math.rad(90), 0)
+				else
+					targetCF = targetCF * CFrame.Angles(0, math.rad(-90), 0)
+				end
+				hrp.CFrame = targetCF
+				hrp.Velocity = Vector3.new(f.vx, f.vy, 0)
+			end
+		end
+
+		-- Check round end
+		local p1Dead = f1.health <= 0
+		local p2Dead = f2.health <= 0
+		local timeout = match.roundTimer <= 0
+
+		if p1Dead or p2Dead or timeout then
+			-- Determine round winner
+			if p2Dead or (not p1Dead and f1.health > f2.health) then
+				f1.roundWins = f1.roundWins + 1
+				f2.state = Config.States.KO
+			elseif p1Dead or (not p2Dead and f2.health > f1.health) then
+				f2.roundWins = f2.roundWins + 1
+				f1.state = Config.States.KO
+			end
+			-- Both dead or equal = no point awarded
+
+			match.phase = Config.Phases.ROUND_END
+			match.phaseTimer = Config.ROUND_END_DELAY
+
+			for _, f in ipairs(match.fighters) do
+				gameEventEvent:FireClient(f.player, "roundEnd", {
+					p1Wins = f1.roundWins,
+					p2Wins = f2.roundWins,
+					round = match.currentRound,
+				})
+			end
+		end
+
+	elseif match.phase == Config.Phases.ROUND_END then
+		match.phaseTimer = match.phaseTimer - dt
+		if match.phaseTimer <= 0 then
+			local f1 = match.fighters[1]
+			local f2 = match.fighters[2]
+			if f1.roundWins >= Config.ROUNDS_TO_WIN or f2.roundWins >= Config.ROUNDS_TO_WIN then
+				endMatch(match)
+			else
+				match.currentRound = match.currentRound + 1
+				resetRound(match)
+				match.phase = Config.Phases.COUNTDOWN
+				match.phaseTimer = Config.COUNTDOWN_TIME
+				for _, f in ipairs(match.fighters) do
+					gameEventEvent:FireClient(f.player, "newRound", { round = match.currentRound })
+				end
+			end
+		end
+	end
+
+	-- Broadcast state to clients
+	if match.phase ~= Config.Phases.MATCH_END then
+		local stateData = {
+			phase = match.phase,
+			roundTimer = match.roundTimer,
+			currentRound = match.currentRound,
+			phaseTimer = match.phaseTimer,
+			fighters = {},
+			projectiles = {},
+		}
+		for i, f in ipairs(match.fighters) do
+			stateData.fighters[i] = {
+				x = f.x,
+				y = f.y,
+				health = f.health,
+				state = f.state,
+				facingRight = f.facingRight,
+				roundWins = f.roundWins,
+				name = f.player.Name,
+			}
+		end
+		for _, p in ipairs(match.projectiles) do
+			table.insert(stateData.projectiles, {
+				x = p.x,
+				y = p.y,
+				vx = p.vx,
+			})
+		end
+
+		for _, f in ipairs(match.fighters) do
+			if f.player.Parent then
+				gameStateEvent:FireClient(f.player, stateData)
+			end
+		end
+	end
+end
+
+-- ============================================================
+-- INPUT HANDLER
+-- ============================================================
+sendInputEvent.OnServerEvent:Connect(function(player, inputData)
+	local match, index = getMatchForPlayer(player)
+	if not match then return end
+	if match.phase ~= Config.Phases.FIGHTING then return end
+
+	local fighter = match.fighters[index]
+	if type(inputData) ~= "table" then return end
+
+	-- Sanitize input
+	fighter.input = {
+		left = inputData.left == true,
+		right = inputData.right == true,
+		jump = inputData.jump == true,
+		block = inputData.block == true,
+		punch = inputData.punch == true,
+		kick = inputData.kick == true,
+		special = inputData.special == true,
+	}
+end)
+
+-- ============================================================
+-- PLAYER JOIN / LEAVE
+-- ============================================================
+Players.PlayerAdded:Connect(function(player)
+	-- Wait for character to spawn
+	player.CharacterAdded:Connect(function(character)
+		-- Disable default health regen
+		local hum = character:WaitForChild("Humanoid")
+		-- Remove health regen script if it exists
+		task.delay(0.5, function()
+			local healthScript = character:FindFirstChild("Health")
+			if healthScript then healthScript:Destroy() end
+		end)
+
+		-- Auto-queue if not in a match
+		task.delay(2, function()
+			if player.Parent and not isInMatch(player) then
+				-- Check if already in queue
+				for _, p in ipairs(queue) do
+					if p == player then return end
+				end
+				table.insert(queue, player)
+				gameEventEvent:FireClient(player, "queued", {})
+				tryMatchmaking()
+			end
+		end)
+	end)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	-- Remove from queue
+	for i = #queue, 1, -1 do
+		if queue[i] == player then
+			table.remove(queue, i)
+		end
+	end
+	-- Match cleanup handled in updateMatch
+end)
+
+-- ============================================================
+-- MAIN GAME LOOP
+-- ============================================================
+RunService.Heartbeat:Connect(function(dt)
+	-- Cap dt to prevent physics issues
+	dt = math.min(dt, 1/30)
+
+	for matchId, match in pairs(activeMatches) do
+		updateMatch(match, dt)
+	end
+end)
+
+-- Periodic matchmaking check
+task.spawn(function()
+	while true do
+		tryMatchmaking()
+		task.wait(2)
+	end
+end)
+
+print("[PixelBrawl] Server loaded!")
+]]></ProtectedString>
+        </Properties>
+      </Item>
+  </Item>
+  <Item class="ServerStorage" referent="RBXF4A234D9">
+    <Properties>
+      <string name="Name">ServerStorage</string>
+    </Properties>
+  </Item>
+  <Item class="StarterGui" referent="RBXF4A234DA">
+    <Properties>
+      <string name="Name">StarterGui</string>
+    </Properties>
+      <Item class="LocalScript" referent="RBX00000068">
+        <Properties>
+          <string name="Name">FightHUD</string>
+          <ProtectedString name="Source"><![CDATA[--[[
+	FightHUD - Client-side UI for Pixel Brawl
+	LOCATION: StarterGui > FightHUD (LocalScript)
+
+	Creates and manages: health bars, timer, round counter, center messages, waiting screen
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local Config = require(ReplicatedStorage:WaitForChild("FightConfig"))
+local remotesFolder = ReplicatedStorage:WaitForChild("FightRemotes")
+local gameStateEvent = remotesFolder:WaitForChild(Config.Remotes.GAME_STATE)
+local gameEventEvent = remotesFolder:WaitForChild(Config.Remotes.GAME_EVENT)
+
+local player = Players.LocalPlayer
+
+-- ============================================================
+-- CREATE GUI
+-- ============================================================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "FightHUD"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Color constants
+local COLOR_RED = Color3.fromRGB(220, 40, 40)
+local COLOR_YELLOW = Color3.fromRGB(220, 220, 40)
+local COLOR_GREEN = Color3.fromRGB(40, 200, 40)
+local COLOR_BLUE = Color3.fromRGB(60, 120, 255)
+local COLOR_BG = Color3.fromRGB(30, 30, 30)
+local COLOR_WHITE = Color3.fromRGB(255, 255, 255)
+local COLOR_GOLD = Color3.fromRGB(255, 215, 0)
+local COLOR_DARK = Color3.fromRGB(15, 15, 25)
+
+-- ============================================================
+-- HELPER: Create UI elements
+-- ============================================================
+local function newFrame(props)
+	local f = Instance.new("Frame")
+	f.BackgroundColor3 = props.color or COLOR_BG
+	f.BorderSizePixel = 0
+	f.Size = props.size or UDim2.new(0, 100, 0, 20)
+	f.Position = props.pos or UDim2.new(0, 0, 0, 0)
+	f.AnchorPoint = props.anchor or Vector2.new(0, 0)
+	if props.transparency then f.BackgroundTransparency = props.transparency end
+	if props.corner then
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, props.corner)
+		c.Parent = f
+	end
+	f.Parent = props.parent or screenGui
+	return f
+end
+
+local function newLabel(props)
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency = 1
+	l.Size = props.size or UDim2.new(0, 100, 0, 30)
+	l.Position = props.pos or UDim2.new(0, 0, 0, 0)
+	l.AnchorPoint = props.anchor or Vector2.new(0, 0)
+	l.Text = props.text or ""
+	l.TextColor3 = props.color or COLOR_WHITE
+	l.TextSize = props.textSize or 18
+	l.Font = props.font or Enum.Font.GothamBold
+	l.TextXAlignment = props.alignX or Enum.TextXAlignment.Center
+	l.TextStrokeTransparency = props.strokeTransparency or 0.5
+	l.TextStrokeColor3 = Color3.new(0, 0, 0)
+	l.Parent = props.parent or screenGui
+	return l
+end
+
+-- ============================================================
+-- HUD CONTAINER (visible during match)
+-- ============================================================
+local hudFrame = newFrame({
+	size = UDim2.new(1, 0, 0, 80),
+	pos = UDim2.new(0, 0, 0, 0),
+	color = Color3.new(0, 0, 0),
+	transparency = 0.6,
+	parent = screenGui,
+})
+hudFrame.Name = "HUD"
+hudFrame.Visible = false
+
+-- P1 Name
+local p1NameLabel = newLabel({
+	size = UDim2.new(0, 200, 0, 20),
+	pos = UDim2.new(0, 20, 0, 5),
+	text = "PLAYER 1",
+	color = COLOR_RED,
+	textSize = 14,
+	alignX = Enum.TextXAlignment.Left,
+	parent = hudFrame,
+})
+
+-- P2 Name
+local p2NameLabel = newLabel({
+	size = UDim2.new(0, 200, 0, 20),
+	pos = UDim2.new(1, -20, 0, 5),
+	anchor = Vector2.new(1, 0),
+	text = "PLAYER 2",
+	color = COLOR_BLUE,
+	textSize = 14,
+	alignX = Enum.TextXAlignment.Right,
+	parent = hudFrame,
+})
+
+-- P1 Health bar background
+local p1BarBG = newFrame({
+	size = UDim2.new(0.35, 0, 0, 20),
+	pos = UDim2.new(0, 20, 0, 28),
+	color = COLOR_BG,
+	corner = 4,
+	parent = hudFrame,
+})
+
+-- P1 Health bar fill
+local p1BarFill = newFrame({
+	size = UDim2.new(1, 0, 1, 0),
+	pos = UDim2.new(0, 0, 0, 0),
+	color = COLOR_GREEN,
+	corner = 4,
+	parent = p1BarBG,
+})
+p1BarFill.Name = "Fill"
+
+-- P1 Health bar border
+local p1Border = Instance.new("UIStroke")
+p1Border.Color = COLOR_WHITE
+p1Border.Thickness = 1.5
+p1Border.Parent = p1BarBG
+
+-- P2 Health bar background
+local p2BarBG = newFrame({
+	size = UDim2.new(0.35, 0, 0, 20),
+	pos = UDim2.new(1, -20, 0, 28),
+	anchor = Vector2.new(1, 0),
+	color = COLOR_BG,
+	corner = 4,
+	parent = hudFrame,
+})
+
+-- P2 Health bar fill (grows from right)
+local p2BarFill = newFrame({
+	size = UDim2.new(1, 0, 1, 0),
+	pos = UDim2.new(1, 0, 0, 0),
+	anchor = Vector2.new(1, 0),
+	color = COLOR_GREEN,
+	corner = 4,
+	parent = p2BarBG,
+})
+p2BarFill.Name = "Fill"
+
+local p2Border = Instance.new("UIStroke")
+p2Border.Color = COLOR_WHITE
+p2Border.Thickness = 1.5
+p2Border.Parent = p2BarBG
+
+-- Timer
+local timerLabel = newLabel({
+	size = UDim2.new(0, 80, 0, 40),
+	pos = UDim2.new(0.5, 0, 0, 14),
+	anchor = Vector2.new(0.5, 0),
+	text = "60",
+	color = COLOR_WHITE,
+	textSize = 32,
+	parent = hudFrame,
+})
+
+-- Round label
+local roundLabel = newLabel({
+	size = UDim2.new(0, 200, 0, 18),
+	pos = UDim2.new(0.5, 0, 0, 54),
+	anchor = Vector2.new(0.5, 0),
+	text = "ROUND 1",
+	color = COLOR_GOLD,
+	textSize = 12,
+	parent = hudFrame,
+})
+
+-- P1 Win dots
+local p1Dots = {}
+for i = 1, Config.ROUNDS_TO_WIN do
+	local dot = newFrame({
+		size = UDim2.new(0, 10, 0, 10),
+		pos = UDim2.new(0, 20 + (i - 1) * 15, 0, 55),
+		color = Color3.fromRGB(60, 60, 60),
+		corner = 5,
+		parent = hudFrame,
+	})
+	table.insert(p1Dots, dot)
+end
+
+-- P2 Win dots
+local p2Dots = {}
+for i = 1, Config.ROUNDS_TO_WIN do
+	local dot = newFrame({
+		size = UDim2.new(0, 10, 0, 10),
+		pos = UDim2.new(1, -20 - (i - 1) * 15, 0, 55),
+		anchor = Vector2.new(1, 0),
+		color = Color3.fromRGB(60, 60, 60),
+		corner = 5,
+		parent = hudFrame,
+	})
+	table.insert(p2Dots, dot)
+end
+
+-- ============================================================
+-- CENTER MESSAGE (FIGHT!, K.O.!, etc)
+-- ============================================================
+local centerLabel = newLabel({
+	size = UDim2.new(1, 0, 0, 80),
+	pos = UDim2.new(0.5, 0, 0.4, 0),
+	anchor = Vector2.new(0.5, 0.5),
+	text = "",
+	color = COLOR_WHITE,
+	textSize = 48,
+	font = Enum.Font.GothamBlack,
+	parent = screenGui,
+})
+centerLabel.Name = "CenterMessage"
+
+local subLabel = newLabel({
+	size = UDim2.new(1, 0, 0, 30),
+	pos = UDim2.new(0.5, 0, 0.48, 0),
+	anchor = Vector2.new(0.5, 0.5),
+	text = "",
+	color = COLOR_GOLD,
+	textSize = 18,
+	parent = screenGui,
+})
+subLabel.Name = "SubMessage"
+
+-- ============================================================
+-- WAITING SCREEN
+-- ============================================================
+local waitingFrame = newFrame({
+	size = UDim2.new(1, 0, 1, 0),
+	color = COLOR_DARK,
+	transparency = 0.3,
+	parent = screenGui,
+})
+waitingFrame.Name = "WaitingScreen"
+
+local titleLabel = newLabel({
+	size = UDim2.new(1, 0, 0, 60),
+	pos = UDim2.new(0.5, 0, 0.3, 0),
+	anchor = Vector2.new(0.5, 0.5),
+	text = "PIXEL BRAWL",
+	color = COLOR_RED,
+	textSize = 48,
+	font = Enum.Font.GothamBlack,
+	parent = waitingFrame,
+})
+
+local waitingLabel = newLabel({
+	size = UDim2.new(1, 0, 0, 30),
+	pos = UDim2.new(0.5, 0, 0.42, 0),
+	anchor = Vector2.new(0.5, 0.5),
+	text = "Waiting for opponent...",
+	color = COLOR_WHITE,
+	textSize = 20,
+	parent = waitingFrame,
+})
+
+-- Controls hint
+local controlsLabel = newLabel({
+	size = UDim2.new(0.8, 0, 0, 120),
+	pos = UDim2.new(0.5, 0, 0.65, 0),
+	anchor = Vector2.new(0.5, 0.5),
+	text = "CONTROLS\n\nMove: A/D or Arrows  |  Jump: W/Up/Space\nBlock: S/Down  |  Punch: F/Q  |  Kick: G/E  |  Special: H/R",
+	color = Color3.fromRGB(150, 150, 150),
+	textSize = 14,
+	parent = waitingFrame,
+})
+controlsLabel.TextWrapped = true
+
+-- ============================================================
+-- MESSAGE SYSTEM
+-- ============================================================
+local messageClear = nil
+
+local function showMessage(text, color, duration, sub)
+	centerLabel.Text = text
+	centerLabel.TextColor3 = color or COLOR_WHITE
+	centerLabel.TextSize = 48
+	subLabel.Text = sub or ""
+
+	-- Animate in
+	centerLabel.TextTransparency = 1
+	TweenService:Create(centerLabel, TweenInfo.new(0.2), { TextTransparency = 0 }):Play()
+
+	if sub then
+		subLabel.TextTransparency = 1
+		TweenService:Create(subLabel, TweenInfo.new(0.3), { TextTransparency = 0 }):Play()
+	end
+
+	if messageClear then
+		task.cancel(messageClear)
+	end
+	messageClear = task.delay(duration or 2, function()
+		TweenService:Create(centerLabel, TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
+		TweenService:Create(subLabel, TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
+	end)
+end
+
+-- ============================================================
+-- UPDATE HUD FROM STATE
+-- ============================================================
+local function getHealthColor(ratio)
+	if ratio > 0.5 then return COLOR_GREEN
+	elseif ratio > 0.25 then return COLOR_YELLOW
+	else return COLOR_RED end
+end
+
+local function updateHUD(state)
+	if not state or not state.fighters or #state.fighters < 2 then return end
+
+	local f1 = state.fighters[1]
+	local f2 = state.fighters[2]
+
+	-- Names
+	p1NameLabel.Text = f1.name or "P1"
+	p2NameLabel.Text = f2.name or "P2"
+
+	-- Health bars
+	local h1 = math.clamp(f1.health / Config.MAX_HEALTH, 0, 1)
+	local h2 = math.clamp(f2.health / Config.MAX_HEALTH, 0, 1)
+
+	p1BarFill.Size = UDim2.new(h1, 0, 1, 0)
+	p1BarFill.BackgroundColor3 = getHealthColor(h1)
+
+	p2BarFill.Size = UDim2.new(h2, 0, 1, 0)
+	p2BarFill.BackgroundColor3 = getHealthColor(h2)
+
+	-- Timer
+	timerLabel.Text = tostring(math.ceil(state.roundTimer or 60))
+	if (state.roundTimer or 60) <= 10 then
+		timerLabel.TextColor3 = COLOR_RED
+	else
+		timerLabel.TextColor3 = COLOR_WHITE
+	end
+
+	-- Round
+	roundLabel.Text = "ROUND " .. (state.currentRound or 1)
+
+	-- Win dots
+	for i, dot in ipairs(p1Dots) do
+		dot.BackgroundColor3 = i <= (f1.roundWins or 0) and COLOR_GOLD or Color3.fromRGB(60, 60, 60)
+	end
+	for i, dot in ipairs(p2Dots) do
+		dot.BackgroundColor3 = i <= (f2.roundWins or 0) and COLOR_GOLD or Color3.fromRGB(60, 60, 60)
+	end
+end
+
+-- ============================================================
+-- GAME STATE HANDLER
+-- ============================================================
+gameStateEvent.OnClientEvent:Connect(function(state)
+	updateHUD(state)
+
+	-- Countdown display
+	if state.phase == Config.Phases.COUNTDOWN then
+		local t = math.ceil(state.phaseTimer or 0)
+		if t > 0 then
+			centerLabel.Text = tostring(t)
+			centerLabel.TextColor3 = COLOR_WHITE
+			centerLabel.TextTransparency = 0
+			subLabel.Text = "ROUND " .. (state.currentRound or 1)
+			subLabel.TextTransparency = 0
+		end
+	end
+end)
+
+-- ============================================================
+-- GAME EVENT HANDLER
+-- ============================================================
+gameEventEvent.OnClientEvent:Connect(function(eventType, data)
+	if eventType == "matchStart" then
+		waitingFrame.Visible = false
+		hudFrame.Visible = true
+		showMessage("VS " .. (data.opponentName or "???"), COLOR_WHITE, 2)
+
+	elseif eventType == "fight" then
+		showMessage("FIGHT!", COLOR_GOLD, 1.5)
+
+	elseif eventType == "roundEnd" then
+		showMessage("K.O.!", COLOR_RED, 2.5)
+
+	elseif eventType == "newRound" then
+		showMessage("ROUND " .. (data.round or "?"), COLOR_WHITE, 1.5, "GET READY")
+
+	elseif eventType == "matchEnd" then
+		local color = data.winnerName == player.Name and COLOR_GOLD or COLOR_RED
+		showMessage(data.winnerName .. " WINS!", color, 4, "Match Over")
+		task.delay(4, function()
+			hudFrame.Visible = false
+			waitingFrame.Visible = true
+			waitingLabel.Text = "Returning to queue..."
+		end)
+
+	elseif eventType == "queued" then
+		waitingFrame.Visible = true
+		hudFrame.Visible = false
+		waitingLabel.Text = "Waiting for opponent..."
+	end
+end)
+
+-- ============================================================
+-- INITIAL STATE
+-- ============================================================
+waitingFrame.Visible = true
+hudFrame.Visible = false
+centerLabel.TextTransparency = 1
+subLabel.TextTransparency = 1
+
+print("[PixelBrawl] HUD loaded!")
+]]></ProtectedString>
+        </Properties>
+      </Item>
+  </Item>
+  <Item class="StarterPack" referent="RBXF4A234DB">
+    <Properties>
+      <string name="Name">StarterPack</string>
+    </Properties>
+  </Item>
+  <Item class="StarterPlayer" referent="RBXF4A234DC">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="RBXF4A234DC1">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="LocalScript" referent="RBX00000067">
+        <Properties>
+          <string name="Name">FightClient</string>
+          <ProtectedString name="Source"><![CDATA[--[[
+	FightClient - Client-side input, camera, and effects for Pixel Brawl
+	LOCATION: StarterPlayer > StarterPlayerScripts > FightClient (LocalScript)
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local Config = require(ReplicatedStorage:WaitForChild("FightConfig"))
+local remotesFolder = ReplicatedStorage:WaitForChild("FightRemotes")
+local sendInputEvent = remotesFolder:WaitForChild(Config.Remotes.SEND_INPUT)
+local gameStateEvent = remotesFolder:WaitForChild(Config.Remotes.GAME_STATE)
+local gameEventEvent = remotesFolder:WaitForChild(Config.Remotes.GAME_EVENT)
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- ============================================================
+-- STATE
+-- ============================================================
+local inMatch = false
+local myIndex = 0
+local opponentName = ""
+local currentState = nil -- latest game state from server
+local screenShake = 0
+local shakeDecay = 0.85
+
+-- Key mappings
+local keyMap = {
+	[Enum.KeyCode.A] = "left",
+	[Enum.KeyCode.Left] = "left",
+	[Enum.KeyCode.D] = "right",
+	[Enum.KeyCode.Right] = "right",
+	[Enum.KeyCode.W] = "jump",
+	[Enum.KeyCode.Up] = "jump",
+	[Enum.KeyCode.Space] = "jump",
+	[Enum.KeyCode.S] = "block",
+	[Enum.KeyCode.Down] = "block",
+	[Enum.KeyCode.F] = "punch",
+	[Enum.KeyCode.Q] = "punch",
+	[Enum.KeyCode.G] = "kick",
+	[Enum.KeyCode.E] = "kick",
+	[Enum.KeyCode.H] = "special",
+	[Enum.KeyCode.R] = "special",
+}
+
+local keysHeld = {
+	left = false, right = false, jump = false,
+	block = false, punch = false, kick = false, special = false,
+}
+
+-- ============================================================
+-- INPUT
+-- ============================================================
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	local action = keyMap[input.KeyCode]
+	if action then
+		keysHeld[action] = true
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+	local action = keyMap[input.KeyCode]
+	if action then
+		keysHeld[action] = false
+	end
+end)
+
+-- Send input to server
+RunService.Heartbeat:Connect(function()
+	if inMatch then
+		sendInputEvent:FireServer(keysHeld)
+	end
+end)
+
+-- ============================================================
+-- CAMERA - 2D SIDE VIEW LOCK
+-- ============================================================
+local CAMERA_Z_OFFSET = 60
+local CAMERA_Y_OFFSET = 12
+local cameraTarget = Vector3.new(0, CAMERA_Y_OFFSET, 0)
+
+local function updateCamera()
+	camera.CameraType = Enum.CameraType.Scriptable
+
+	-- Follow midpoint between fighters if we have state
+	if currentState and currentState.fighters and #currentState.fighters >= 2 then
+		local f1 = currentState.fighters[1]
+		local f2 = currentState.fighters[2]
+		local midX = (f1.x + f2.x) / 2
+		local midY = math.max((f1.y + f2.y) / 2 + 8, CAMERA_Y_OFFSET)
+		cameraTarget = Vector3.new(midX, midY, 0)
+	end
+
+	-- Screen shake offset
+	local shakeX = 0
+	local shakeY = 0
+	if screenShake > 0.5 then
+		shakeX = (math.random() - 0.5) * screenShake
+		shakeY = (math.random() - 0.5) * screenShake
+		screenShake = screenShake * shakeDecay
+	else
+		screenShake = 0
+	end
+
+	local camPos = Vector3.new(cameraTarget.X + shakeX, cameraTarget.Y + shakeY, CAMERA_Z_OFFSET)
+	camera.CFrame = CFrame.new(camPos, Vector3.new(cameraTarget.X + shakeX, cameraTarget.Y + shakeY, 0))
+end
+
+RunService.RenderStepped:Connect(updateCamera)
+
+-- ============================================================
+-- EFFECTS
+-- ============================================================
+local function createHitEffect(position, color, count)
+	for i = 1, (count or 6) do
+		local part = Instance.new("Part")
+		part.Size = Vector3.new(0.4, 0.4, 0.4)
+		part.Position = Vector3.new(position.x or 0, (position.y or 3) + 3, 0)
+		part.Anchored = false
+		part.CanCollide = false
+		part.Material = Enum.Material.Neon
+		part.BrickColor = BrickColor.new(color or "Bright yellow")
+		part.Parent = workspace
+
+		local velocity = Instance.new("BodyVelocity")
+		velocity.Velocity = Vector3.new(
+			(math.random() - 0.5) * 30,
+			math.random() * 20 + 10,
+			(math.random() - 0.5) * 5
+		)
+		velocity.MaxForce = Vector3.new(1000, 1000, 1000)
+		velocity.Parent = part
+
+		game:GetService("Debris"):AddItem(part, 0.5)
+		game:GetService("Debris"):AddItem(velocity, 0.15)
+	end
+end
+
+local function createProjectileEffect(data)
+	local part = Instance.new("Part")
+	part.Name = "Projectile"
+	part.Size = Vector3.new(2, 1, 1)
+	part.Position = Vector3.new(data.x, data.y + 3, 0)
+	part.Anchored = false
+	part.CanCollide = false
+	part.Material = Enum.Material.Neon
+	part.BrickColor = BrickColor.new("Cyan")
+	part.Shape = Enum.PartType.Ball
+	part.Parent = workspace
+
+	local velocity = Instance.new("BodyVelocity")
+	velocity.Velocity = Vector3.new(data.dir * Config.Attacks.special.projectileSpeed, 0, 0)
+	velocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+	velocity.Parent = part
+
+	-- Light
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(100, 180, 255)
+	light.Range = 12
+	light.Brightness = 2
+	light.Parent = part
+
+	game:GetService("Debris"):AddItem(part, Config.Attacks.special.projectileLifetime)
+end
+
+-- ============================================================
+-- SOUND EFFECTS
+-- ============================================================
+local sounds = {}
+
+local function createSound(name, soundId, volume, pitch)
+	local sound = Instance.new("Sound")
+	sound.Name = name
+	sound.Volume = volume or 0.5
+	if pitch then sound.PlaybackSpeed = pitch end
+	sound.Parent = player:WaitForChild("PlayerGui")
+	sounds[name] = sound
+	return sound
+end
+
+-- We'll use tone-generation via no SoundId (just clicks) as placeholder
+-- In a real game you'd upload sound assets
+local punchSound = createSound("Punch", nil, 0.3, 1.5)
+local kickSound = createSound("Kick", nil, 0.4, 0.8)
+local hitSound = createSound("Hit", nil, 0.5, 1.0)
+local blockSound = createSound("Block", nil, 0.3, 2.0)
+
+-- ============================================================
+-- GAME EVENT HANDLER
+-- ============================================================
+gameEventEvent.OnClientEvent:Connect(function(eventType, data)
+	if eventType == "matchStart" then
+		inMatch = true
+		myIndex = data.playerIndex
+		opponentName = data.opponentName
+		print("[PixelBrawl] Match started! You are Player " .. myIndex .. " vs " .. opponentName)
+
+		-- Disable default controls
+		local playerModule = player:WaitForChild("PlayerScripts"):FindFirstChild("PlayerModule")
+		if playerModule then
+			local controls = require(playerModule):GetControls()
+			controls:Disable()
+		end
+
+	elseif eventType == "fight" then
+		print("[PixelBrawl] FIGHT!")
+
+	elseif eventType == "attack" then
+		if data.attackType == "punch" then
+			punchSound:Play()
+		elseif data.attackType == "kick" then
+			kickSound:Play()
+		end
+
+	elseif eventType == "hit" then
+		hitSound:Play()
+		screenShake = 6
+		createHitEffect(data, "Bright yellow", 8)
+
+	elseif eventType == "blocked" then
+		blockSound:Play()
+		screenShake = 2
+		createHitEffect(data, "Bright blue", 4)
+
+	elseif eventType == "projectile" then
+		createProjectileEffect(data)
+
+	elseif eventType == "roundEnd" then
+		print("[PixelBrawl] Round over! P1: " .. data.p1Wins .. " | P2: " .. data.p2Wins)
+		screenShake = 10
+
+	elseif eventType == "newRound" then
+		print("[PixelBrawl] Round " .. data.round .. "!")
+
+	elseif eventType == "matchEnd" then
+		print("[PixelBrawl] " .. data.winnerName .. " wins the match!")
+		screenShake = 15
+		inMatch = false
+
+		-- Re-enable controls
+		task.delay(2, function()
+			camera.CameraType = Enum.CameraType.Custom
+			local playerModule = player:WaitForChild("PlayerScripts"):FindFirstChild("PlayerModule")
+			if playerModule then
+				local controls = require(playerModule):GetControls()
+				controls:Enable()
+			end
+		end)
+
+	elseif eventType == "queued" then
+		print("[PixelBrawl] Waiting for an opponent...")
+	end
+end)
+
+-- ============================================================
+-- GAME STATE HANDLER
+-- ============================================================
+gameStateEvent.OnClientEvent:Connect(function(state)
+	currentState = state
+end)
+
+-- ============================================================
+-- LOCK Z POSITION (keep 2D)
+-- ============================================================
+RunService.Heartbeat:Connect(function()
+	local char = player.Character
+	if char and inMatch then
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			-- Server handles position, but ensure Z stays at 0
+			if math.abs(hrp.Position.Z) > 1 then
+				hrp.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y, 0) * (hrp.CFrame - hrp.CFrame.Position)
+			end
+		end
+	end
+end)
+
+print("[PixelBrawl] Client loaded!")
+]]></ProtectedString>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="StarterCharacterScripts" referent="RBXF4A234DC2">
+      <Properties>
+        <string name="Name">StarterCharacterScripts</string>
+      </Properties>
+    </Item>
+  </Item>
+  <Item class="SoundService" referent="RBXF4A234DD">
+    <Properties>
+      <string name="Name">SoundService</string>
+    </Properties>
+  </Item>
+  <Item class="Teams" referent="RBXF4A234DE">
+    <Properties>
+      <string name="Name">Teams</string>
+    </Properties>
+  </Item>
+  <Item class="Chat" referent="RBXF4A234DF">
+    <Properties>
+      <string name="Name">Chat</string>
+    </Properties>
+  </Item>
+  <Item class="LocalizationService" referent="RBXF4A234E0">
+    <Properties>
+      <string name="Name">LocalizationService</string>
+    </Properties>
+  </Item>
+  <Item class="TestService" referent="RBXF4A234E1">
+    <Properties>
+      <string name="Name">TestService</string>
+    </Properties>
+  </Item>
+</roblox>

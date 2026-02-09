@@ -1,0 +1,161 @@
+=====================================================
+  PIXEL BRAWL - Roblox Studio Setup Guide
+=====================================================
+
+This guide walks you through setting up the fighting
+game in Roblox Studio step by step.
+
+=====================================================
+STEP 1: Open Roblox Studio
+=====================================================
+- Open Roblox Studio
+- Create a new Baseplate place (or empty place)
+- Delete the default Baseplate part (the arena is
+  created automatically by the server script)
+
+=====================================================
+STEP 2: Add the Shared Module
+=====================================================
+Location: ReplicatedStorage
+
+1. In the Explorer panel, right-click "ReplicatedStorage"
+2. Click Insert Object > ModuleScript
+3. Rename it to "FightConfig"
+4. Open FightConfig.lua from the roblox/ReplicatedStorage/ folder
+5. Copy ALL the code and paste it into the ModuleScript
+
+=====================================================
+STEP 3: Add the Server Script
+=====================================================
+Location: ServerScriptService
+
+1. In the Explorer panel, right-click "ServerScriptService"
+2. Click Insert Object > Script
+3. Rename it to "FightServer"
+4. Open FightServer.server.lua from roblox/ServerScriptService/
+5. Copy ALL the code and paste it into the Script
+
+=====================================================
+STEP 4: Add the Client Script
+=====================================================
+Location: StarterPlayer > StarterPlayerScripts
+
+1. In the Explorer panel, expand "StarterPlayer"
+2. Right-click "StarterPlayerScripts"
+3. Click Insert Object > LocalScript
+4. Rename it to "FightClient"
+5. Open FightClient.client.lua from roblox/StarterPlayerScripts/
+6. Copy ALL the code and paste it into the LocalScript
+
+=====================================================
+STEP 5: Add the HUD Script
+=====================================================
+Location: StarterGui
+
+1. In the Explorer panel, right-click "StarterGui"
+2. Click Insert Object > LocalScript
+3. Rename it to "FightHUD"
+4. Open FightHUD.client.lua from roblox/StarterGui/
+5. Copy ALL the code and paste it into the LocalScript
+
+=====================================================
+STEP 6: Test It!
+=====================================================
+
+TO TEST WITH 2 PLAYERS (recommended):
+1. In Roblox Studio, go to the "Test" tab
+2. Click the dropdown next to "Play" and select
+   "Start" (server + 2 clients)
+   OR set "Players" to 2 and click "Start"
+3. Two client windows will open
+4. Both players are auto-queued and matched
+5. Use the controls below to fight!
+
+TO TEST SOLO (just to see the waiting screen):
+1. Click "Play" (single player)
+2. You'll see the "Waiting for opponent..." screen
+3. You need a second player to start a match
+
+=====================================================
+CONTROLS
+=====================================================
+
+  Action      Keys
+  --------    -------------------------
+  Move Left   A or Left Arrow
+  Move Right  D or Right Arrow
+  Jump        W or Up Arrow or Space
+  Block       S or Down Arrow (hold)
+  Punch       F or Q
+  Kick        G or E
+  Special     H or R
+
+=====================================================
+HOW IT WORKS
+=====================================================
+
+- Players auto-join a matchmaking queue on spawn
+- When 2 players are queued, a match begins
+- 3-second countdown, then FIGHT!
+- Health bars, 60-second timer, best of 3 rounds
+- K.O. when health reaches 0, or most health at
+  timeout wins the round
+- Winner of 2 rounds wins the match
+- After match, players return to queue automatically
+
+=====================================================
+FILE STRUCTURE IN STUDIO
+=====================================================
+
+  game
+  ├── ServerScriptService
+  │   └── FightServer (Script)
+  ├── ReplicatedStorage
+  │   └── FightConfig (ModuleScript)
+  ├── StarterPlayer
+  │   └── StarterPlayerScripts
+  │       └── FightClient (LocalScript)
+  ├── StarterGui
+  │   └── FightHUD (LocalScript)
+  └── Workspace
+      └── Arena (auto-created by server)
+          ├── Floor
+          ├── WallLeft
+          └── WallRight
+
+=====================================================
+CUSTOMIZATION
+=====================================================
+
+To tweak the game, edit FightConfig (ModuleScript):
+
+- MAX_HEALTH: Change fighter health (default 100)
+- ROUND_TIME: Change round timer (default 60 seconds)
+- ROUNDS_TO_WIN: Change from best-of-3 (default 2)
+- MOVE_SPEED: Make fighters faster/slower
+- JUMP_FORCE: Higher/lower jumps
+- Attacks table: Change damage, range, speed of
+  each attack (punch, kick, special)
+- ARENA_MIN_X / ARENA_MAX_X: Arena size
+
+=====================================================
+TROUBLESHOOTING
+=====================================================
+
+"Nothing happens when I play"
+- Make sure you're testing with 2 players
+  (Test > Start with 2 players)
+- Check Output window for "[PixelBrawl]" messages
+
+"Characters don't move right"
+- The server controls character positions
+- Make sure FightConfig is a ModuleScript (not Script)
+- Check that all scripts are in the correct locations
+
+"HUD doesn't show"
+- FightHUD must be a LocalScript in StarterGui
+- Check Output for errors
+
+"Camera is wrong"
+- FightClient handles camera. Make sure it's a
+  LocalScript in StarterPlayerScripts
