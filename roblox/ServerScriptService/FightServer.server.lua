@@ -332,17 +332,17 @@ local function setupLobby()
 
 	local LZ = 300 -- lobby center Z
 
-	-- Floor (dark wood dojo) — BIGGER: 120x100
+	-- Floor (lighter wood dojo) — BIGGER: 120x100
 	local floor = Instance.new("Part")
 	floor.Name = "LobbyFloor"
 	floor.Size = Vector3.new(120, 2, 100)
 	floor.Position = Vector3.new(0, -1, LZ)
 	floor.Anchored = true
 	floor.Material = Enum.Material.WoodPlanks
-	floor.Color = Color3.fromRGB(60, 40, 25)
+	floor.Color = Color3.fromRGB(140, 110, 85)
 	floor.Parent = lobby
 
-	-- Tatami strips
+	-- Tatami strips (lighter colors)
 	for i = -5, 5 do
 		local strip = Instance.new("Part")
 		strip.Size = Vector3.new(10, 0.05, 96)
@@ -350,11 +350,11 @@ local function setupLobby()
 		strip.Anchored = true
 		strip.CanCollide = false
 		strip.Material = Enum.Material.Fabric
-		strip.Color = (i % 2 == 0) and Color3.fromRGB(75, 55, 30) or Color3.fromRGB(55, 38, 20)
+		strip.Color = (i % 2 == 0) and Color3.fromRGB(160, 130, 100) or Color3.fromRGB(130, 100, 75)
 		strip.Parent = lobby
 	end
 
-	-- Walls — expanded
+	-- Walls — expanded (lighter wood)
 	local function makeWall(name, size, pos)
 		local w = Instance.new("Part")
 		w.Name = name
@@ -362,7 +362,7 @@ local function setupLobby()
 		w.Position = pos
 		w.Anchored = true
 		w.Material = Enum.Material.Wood
-		w.Color = Color3.fromRGB(45, 35, 30)
+		w.Color = Color3.fromRGB(120, 90, 70)
 		w.Parent = lobby
 		return w
 	end
@@ -378,24 +378,31 @@ local function setupLobby()
 	frontWall.Transparency = 1
 	frontWall.Parent = lobby
 
-	-- Roof with skylight
+	-- Roof with skylight (lighter)
 	local roof = Instance.new("Part")
 	roof.Size = Vector3.new(124, 1, 104)
 	roof.Position = Vector3.new(0, 19.5, LZ)
 	roof.Anchored = true
 	roof.Material = Enum.Material.Wood
-	roof.Color = Color3.fromRGB(35, 25, 18)
+	roof.Color = Color3.fromRGB(100, 75, 55)
 	roof.Parent = lobby
 
-	-- Skylight (neon center)
+	-- Skylight (brighter neon center with light)
 	local skylight = Instance.new("Part")
-	skylight.Size = Vector3.new(30, 0.5, 30)
+	skylight.Size = Vector3.new(40, 0.5, 40)
 	skylight.Position = Vector3.new(0, 19.8, LZ)
 	skylight.Anchored = true
 	skylight.CanCollide = false
 	skylight.Material = Enum.Material.Neon
-	skylight.Color = Color3.fromRGB(200, 180, 140)
+	skylight.Color = Color3.fromRGB(255, 240, 200)
 	skylight.Parent = lobby
+
+	-- Skylight glow (big overhead light)
+	local skylightGlow = Instance.new("PointLight")
+	skylightGlow.Color = Color3.fromRGB(255, 240, 200)
+	skylightGlow.Brightness = 5
+	skylightGlow.Range = 80
+	skylightGlow.Parent = skylight
 
 	-- PIXEL BRAWL sign on back wall
 	local signPart = Instance.new("Part")
@@ -541,29 +548,29 @@ local function setupLobby()
 	-- SHOP portal (gold, center-front)
 	makePortal("ShopPortal", 0, LZ - 35, Color3.fromRGB(255, 200, 50), "SHOP")
 
-	-- Lanterns (6 around the bigger room)
+	-- Lanterns (12 around the room - more lighting!)
 	local lanternPositions = {
-		Vector3.new(-50, 6, LZ + 40),
-		Vector3.new(50, 6, LZ + 40),
-		Vector3.new(-50, 6, LZ),
-		Vector3.new(50, 6, LZ),
-		Vector3.new(-50, 6, LZ - 40),
-		Vector3.new(50, 6, LZ - 40),
+		Vector3.new(-50, 6, LZ + 40), Vector3.new(50, 6, LZ + 40),
+		Vector3.new(-50, 6, LZ + 20), Vector3.new(50, 6, LZ + 20),
+		Vector3.new(-50, 6, LZ), Vector3.new(50, 6, LZ),
+		Vector3.new(-50, 6, LZ - 20), Vector3.new(50, 6, LZ - 20),
+		Vector3.new(-50, 6, LZ - 40), Vector3.new(50, 6, LZ - 40),
+		Vector3.new(0, 6, LZ + 45), Vector3.new(0, 6, LZ - 45),
 	}
 	for _, lpos in ipairs(lanternPositions) do
 		local lantern = Instance.new("Part")
-		lantern.Size = Vector3.new(1.5, 2, 1.5)
+		lantern.Size = Vector3.new(2, 3, 2)
 		lantern.Position = lpos
 		lantern.Anchored = true
 		lantern.CanCollide = false
 		lantern.Material = Enum.Material.Neon
-		lantern.Color = Color3.fromRGB(255, 160, 50)
+		lantern.Color = Color3.fromRGB(255, 220, 150)
 		lantern.Shape = Enum.PartType.Cylinder
 		lantern.Parent = lobby
 		local ll = Instance.new("PointLight")
-		ll.Color = Color3.fromRGB(255, 160, 50)
-		ll.Brightness = 2
-		ll.Range = 25
+		ll.Color = Color3.fromRGB(255, 220, 150)
+		ll.Brightness = 4
+		ll.Range = 35
 		ll.Parent = lantern
 	end
 
@@ -587,6 +594,61 @@ local function setupLobby()
 		staff.Parent = lobby
 	end
 
+	-- Leaderboard on right side of back wall
+	local leaderboardPart = Instance.new("Part")
+	leaderboardPart.Name = "LeaderboardPart"
+	leaderboardPart.Size = Vector3.new(25, 14, 0.5)
+	leaderboardPart.Position = Vector3.new(30, 11, LZ + 49.5)
+	leaderboardPart.Anchored = true
+	leaderboardPart.CanCollide = false
+	leaderboardPart.Material = Enum.Material.SmoothPlastic
+	leaderboardPart.Color = Color3.fromRGB(20, 20, 30)
+	leaderboardPart.Parent = lobby
+
+	local leaderboardGui = Instance.new("SurfaceGui")
+	leaderboardGui.Name = "LeaderboardGui"
+	leaderboardGui.Face = Enum.NormalId.Front
+	leaderboardGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	leaderboardGui.PixelsPerStud = 50
+	leaderboardGui.Parent = leaderboardPart
+
+	local lbBg = Instance.new("Frame")
+	lbBg.Size = UDim2.new(1, 0, 1, 0)
+	lbBg.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+	lbBg.BorderSizePixel = 0
+	lbBg.Parent = leaderboardGui
+
+	-- Header
+	local lbHeader = Instance.new("TextLabel")
+	lbHeader.Size = UDim2.new(1, -20, 0, 60)
+	lbHeader.Position = UDim2.new(0, 10, 0, 10)
+	lbHeader.BackgroundTransparency = 1
+	lbHeader.Text = "TOP FIGHTERS"
+	lbHeader.TextColor3 = Color3.fromRGB(255, 200, 50)
+	lbHeader.TextScaled = true
+	lbHeader.Font = Enum.Font.GothamBlack
+	lbHeader.TextStrokeTransparency = 0
+	lbHeader.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	lbHeader.Parent = lbBg
+
+	-- Leaderboard entries container
+	local lbList = Instance.new("ScrollingFrame")
+	lbList.Name = "LeaderboardList"
+	lbList.Size = UDim2.new(1, -20, 1, -80)
+	lbList.Position = UDim2.new(0, 10, 0, 70)
+	lbList.BackgroundTransparency = 1
+	lbList.BorderSizePixel = 0
+	lbList.ScrollBarThickness = 6
+	lbList.CanvasSize = UDim2.new(0, 0, 0, 0)
+	lbList.Parent = lbBg
+
+	-- Leaderboard glow
+	local lbGlow = Instance.new("PointLight")
+	lbGlow.Color = Color3.fromRGB(255, 200, 50)
+	lbGlow.Brightness = 2
+	lbGlow.Range = 15
+	lbGlow.Parent = leaderboardPart
+
 	return lobby
 end
 
@@ -600,6 +662,7 @@ local zoneCooldown = {}      -- [UserId] = tick() of last zone trigger
 local playerTokens = {}      -- [UserId] = number (battle tokens)
 local playerInventory = {}   -- [UserId] = { ["dashPunch"] = true, ... }
 local playerEquipped = {}    -- [UserId] = { [1] = "dashPunch" or nil, [2] = nil }
+local playerWins = {}        -- [UserId] = number (total wins)
 
 local function teleportToLobby(player)
 	playerState[player.UserId] = Config.PlayerStates.LOBBY
@@ -612,6 +675,7 @@ local function teleportToLobby(player)
 	char.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	if hum then
+		hum:ChangeState(Enum.HumanoidStateType.GettingUp)
 		hum.MaxHealth = 100
 		hum.Health = 100
 		hum.WalkSpeed = 16
@@ -1032,6 +1096,8 @@ local function createFighterState(player, spawnX, facingRight)
 		onGround = true,
 		isBot = (player == AI_BOT),
 		equippedAbilities = equipped,
+		abilitiesUsed = { false, false }, -- Track if ability was used this round
+		abilitiesUnlocked = { false, false }, -- Unlock when opponent at 25% health
 	}
 end
 
@@ -1175,13 +1241,15 @@ local function createMatch(player1, player2)
 	if not (player1 == AI_BOT) then
 		local char1 = player1.Character
 		if char1 and char1:FindFirstChild("HumanoidRootPart") then
-			char1.HumanoidRootPart.CFrame = CFrame.new(-30, Config.GROUND_Y + 3, 0)
+			char1.HumanoidRootPart.CFrame = CFrame.new(-30, Config.GROUND_Y, 0)
+			char1.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
 		end
 	end
 	if not (player2 == AI_BOT) then
 		local char2 = player2.Character
 		if char2 and char2:FindFirstChild("HumanoidRootPart") then
-			char2.HumanoidRootPart.CFrame = CFrame.new(30, Config.GROUND_Y + 3, 0)
+			char2.HumanoidRootPart.CFrame = CFrame.new(30, Config.GROUND_Y, 0)
+			char2.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
 		end
 	end
 
@@ -1189,6 +1257,7 @@ local function createMatch(player1, player2)
 		if not f.isBot and f.player.Character then
 			local hum = f.player.Character:FindFirstChildOfClass("Humanoid")
 			if hum then
+				hum:ChangeState(Enum.HumanoidStateType.Physics)
 				hum.MaxHealth = math.huge
 				hum.Health = math.huge
 			end
@@ -1304,6 +1373,23 @@ local function updateFighter(fighter, opponent, dt, match)
 	if fighter.state == Config.States.KO then return end
 	fighter.stateTimer = math.max(0, fighter.stateTimer - dt)
 
+	-- Check if abilities should unlock (opponent at 25% health or lower)
+	if opponent and opponent.health <= Config.MAX_HEALTH * 0.25 then
+		for i = 1, 2 do
+			if fighter.equippedAbilities[i] and not fighter.abilitiesUnlocked[i] then
+				fighter.abilitiesUnlocked[i] = true
+				-- Notify player that ability is ready
+				if not fighter.isBot then
+					fireToFighters(match, "abilityReady", {
+						playerIndex = fighter == match.fighters[1] and 1 or 2,
+						abilitySlot = i,
+						abilityName = Config.ShopAbilities[fighter.equippedAbilities[i]].name
+					})
+				end
+			end
+		end
+	end
+
 	if fighter.isBot then
 		local diff = "medium"
 		for _, f in ipairs(match and match.fighters or {}) do
@@ -1373,7 +1459,12 @@ local function updateFighter(fighter, opponent, dt, match)
 				life = atk.projectileLifetime, damage = atk.damage,
 				knockback = atk.knockback, hitstun = atk.hitstun,
 			})
-			fireToFighters(match, "projectile", { x = fighter.x + dir * 4, y = fighter.y + 3, dir = dir })
+			fireToFighters(match, "projectile", {
+				x = fighter.x + dir * 4,
+				y = fighter.y + 3,
+				dir = dir,
+				abilityKey = atkKey  -- Pass ability key for colored VFX
+			})
 		end
 
 		if fighter.stateTimer <= 0 then fighter.state = Config.States.IDLE end
@@ -1436,34 +1527,30 @@ local function updateFighter(fighter, opponent, dt, match)
 		fighter.attackHit = false; fighter.vx = 0
 		fireToFighters(match, "attack", { attackType = "special", attacker = fighter == match.fighters[1] and 1 or 2 })
 	elseif newPress("ability1") then
-		if fighter.equippedAbilities[1] then
+		-- Check if ability is equipped, unlocked, and not used
+		if fighter.equippedAbilities[1] and fighter.abilitiesUnlocked[1] and not fighter.abilitiesUsed[1] then
 			local atk = Config.AbilityAttacks[fighter.equippedAbilities[1]]
 			if atk then
 				fighter.state = Config.States.ABILITY1
 				fighter.stateTimer = atk.startup + atk.active + atk.recovery
 				fighter.attackHit = false; fighter.vx = 0
+				fighter.abilitiesUsed[1] = true  -- Mark as used for this round
 				fireToFighters(match, "attack", { attackType = fighter.equippedAbilities[1], attacker = fighter == match.fighters[1] and 1 or 2 })
 				print("[PixelBrawl] ABILITY1 triggered: " .. tostring(fighter.equippedAbilities[1]) .. " timer=" .. tostring(fighter.stateTimer))
-			else
-				print("[PixelBrawl] ABILITY1 key '" .. tostring(fighter.equippedAbilities[1]) .. "' not found in AbilityAttacks!")
 			end
-		else
-			print("[PixelBrawl] ABILITY1 pressed but equippedAbilities[1] is nil! equippedAbilities = " .. tostring(fighter.equippedAbilities[1]) .. ", " .. tostring(fighter.equippedAbilities[2]))
 		end
 	elseif newPress("ability2") then
-		if fighter.equippedAbilities[2] then
+		-- Check if ability is equipped, unlocked, and not used
+		if fighter.equippedAbilities[2] and fighter.abilitiesUnlocked[2] and not fighter.abilitiesUsed[2] then
 			local atk = Config.AbilityAttacks[fighter.equippedAbilities[2]]
 			if atk then
 				fighter.state = Config.States.ABILITY2
 				fighter.stateTimer = atk.startup + atk.active + atk.recovery
 				fighter.attackHit = false; fighter.vx = 0
+				fighter.abilitiesUsed[2] = true  -- Mark as used for this round
 				fireToFighters(match, "attack", { attackType = fighter.equippedAbilities[2], attacker = fighter == match.fighters[1] and 1 or 2 })
 				print("[PixelBrawl] ABILITY2 triggered: " .. tostring(fighter.equippedAbilities[2]) .. " timer=" .. tostring(fighter.stateTimer))
-			else
-				print("[PixelBrawl] ABILITY2 key '" .. tostring(fighter.equippedAbilities[2]) .. "' not found in AbilityAttacks!")
 			end
-		else
-			print("[PixelBrawl] ABILITY2 pressed but equippedAbilities[2] is nil! equippedAbilities = " .. tostring(fighter.equippedAbilities[1]) .. ", " .. tostring(fighter.equippedAbilities[2]))
 		end
 	end
 
@@ -1514,10 +1601,13 @@ local function resetRound(match)
 		f.health = Config.MAX_HEALTH; f.state = Config.States.IDLE
 		f.stateTimer = 0; f.attackHit = false
 		f.facingRight = i == 1; f.onGround = true
+		-- Reset abilities for new round
+		f.abilitiesUsed = { false, false }
+		f.abilitiesUnlocked = { false, false }
 		if not f.isBot then
 			local char = f.player.Character
 			if char and char:FindFirstChild("HumanoidRootPart") then
-				char.HumanoidRootPart.CFrame = CFrame.new(f.x, Config.GROUND_Y + 3, 0)
+				char.HumanoidRootPart.CFrame = CFrame.new(f.x, Config.GROUND_Y, 0)
 				char.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
 			end
 		end
@@ -1564,14 +1654,20 @@ local function updateMatch(match, dt)
 			if not f.isBot then
 				local char = f.player.Character
 				if char and char:FindFirstChild("HumanoidRootPart") then
-					local targetCF = CFrame.new(f.x, f.y + 3, 0)
+					-- Keep humanoid in Physics state
+					local hum = char:FindFirstChildOfClass("Humanoid")
+					if hum and hum:GetState() ~= Enum.HumanoidStateType.Physics then
+						hum:ChangeState(Enum.HumanoidStateType.Physics)
+					end
+
+					local targetCF = CFrame.new(f.x, f.y, 0)
 					if f.facingRight then
 						targetCF = targetCF * CFrame.Angles(0, math.rad(90), 0)
 					else
 						targetCF = targetCF * CFrame.Angles(0, math.rad(-90), 0)
 					end
 					char.HumanoidRootPart.CFrame = targetCF
-					char.HumanoidRootPart.Velocity = Vector3.new(f.vx, f.vy, 0)
+					char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(f.vx, f.vy, 0)
 				end
 			else
 				if match.botModel then

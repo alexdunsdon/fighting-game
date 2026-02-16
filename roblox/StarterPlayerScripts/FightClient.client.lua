@@ -87,7 +87,7 @@ UserInputService.InputEnded:Connect(function(input, gameProcessed)
 	if action then keysHeld[action] = false end
 end)
 
--- Send input to server (only during matches, keyboard only — mobile handled by FightHUD)
+-- Send input to server (only during matches, keyboard only ‚Äî mobile handled by FightHUD)
 RunService.Heartbeat:Connect(function()
 	if inMatch and not isMobile then
 		sendInputEvent:FireServer(keysHeld)
@@ -171,12 +171,21 @@ local function createHitEffect(position, color, count)
 end
 
 local function createProjectileEffect(data)
-	-- Determine projectile properties from ability data
-	local speed = 60
-	local lifetime = 2
-	local coreColor = Color3.fromRGB(255, 200, 50)   -- bright yellow-orange core
-	local glowColor = Color3.fromRGB(255, 80, 20)     -- deep orange-red glow
-	local trailColor = Color3.fromRGB(255, 60, 10)    -- red-orange trail
+	local part = Instance.new("Part")
+	part.Name = "Projectile"
+	part.Size = Vector3.new(2, 1, 1)
+	part.Position = Vector3.new(data.x, data.y + 3, 0)
+	part.Anchored = false
+	part.CanCollide = false
+	part.Material = Enum.Material.Neon
+	part.Shape = Enum.PartType.Ball
+	part.Parent = workspace
+
+	-- Determine projectile properties (ability fireball vs base special)
+	local speed = Config.Attacks.special.projectileSpeed
+	local lifetime = Config.Attacks.special.projectileLifetime
+	local lightColor = Color3.fromRGB(100, 180, 255)
+	local partColor = BrickColor.new("Cyan")
 
 	if data.abilityKey and Config.AbilityAttacks[data.abilityKey] then
 		local atkData = Config.AbilityAttacks[data.abilityKey]
@@ -184,116 +193,25 @@ local function createProjectileEffect(data)
 		lifetime = atkData.projectileLifetime or lifetime
 		if Config.ShopAbilities[data.abilityKey] then
 			local c = Config.ShopAbilities[data.abilityKey].color
-			glowColor = c
+			lightColor = c
+			partColor = BrickColor.new(c)
 		end
 	end
 
-	-- Main fireball core (bright inner sphere)
-	local core = Instance.new("Part")
-	core.Name = "FireballCore"
-	core.Size = Vector3.new(1.8, 1.8, 1.8)
-	core.Position = Vector3.new(data.x, data.y + 3, 0)
-	core.Anchored = false
-	core.CanCollide = false
-	core.Material = Enum.Material.Neon
-	core.Shape = Enum.PartType.Ball
-	core.Color = coreColor
-	core.Transparency = 0
-	core.Parent = workspace
+	part.BrickColor = partColor
 
-	-- Outer glow shell (slightly larger, semi-transparent)
-	local glow = Instance.new("Part")
-	glow.Name = "FireballGlow"
-	glow.Size = Vector3.new(3.0, 3.0, 3.0)
-	glow.Anchored = false
-	glow.CanCollide = false
-	glow.Material = Enum.Material.Neon
-	glow.Shape = Enum.PartType.Ball
-	glow.Color = glowColor
-	glow.Transparency = 0.5
-	glow.Parent = workspace
-
-	-- Weld glow to core so they move together
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = core
-	weld.Part1 = glow
-	weld.Parent = core
-
-	-- Velocity on core (glow follows via weld)
 	local vel = Instance.new("BodyVelocity")
 	vel.Velocity = Vector3.new(data.dir * speed, 0, 0)
 	vel.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-	vel.Parent = core
+	vel.Parent = part
 
-	-- Bright point light for fire glow
 	local light = Instance.new("PointLight")
-	light.Color = glowColor
-	light.Range = 18
-	light.Brightness = 3
-	light.Parent = core
+	light.Color = lightColor
+	light.Range = 12
+	light.Brightness = 2
+	light.Parent = part
 
-	-- Fire particle emitter (trailing flames)
-	local fireEmitter = Instance.new("ParticleEmitter")
-	fireEmitter.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, coreColor),
-		ColorSequenceKeypoint.new(0.3, glowColor),
-		ColorSequenceKeypoint.new(1, trailColor),
-	})
-	fireEmitter.Size = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 2.0),
-		NumberSequenceKeypoint.new(0.5, 1.2),
-		NumberSequenceKeypoint.new(1, 0),
-	})
-	fireEmitter.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.2),
-		NumberSequenceKeypoint.new(0.5, 0.5),
-		NumberSequenceKeypoint.new(1, 1),
-	})
-	fireEmitter.Lifetime = NumberRange.new(0.15, 0.35)
-	fireEmitter.Rate = 120
-	fireEmitter.Speed = NumberRange.new(2, 8)
-	fireEmitter.SpreadAngle = Vector2.new(25, 25)
-	fireEmitter.RotSpeed = NumberRange.new(-200, 200)
-	fireEmitter.LightEmission = 1
-	fireEmitter.LightInfluence = 0
-	fireEmitter.Parent = core
-
-	-- Smoke trail behind fireball
-	local smokeEmitter = Instance.new("ParticleEmitter")
-	smokeEmitter.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 40, 10)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 30, 30)),
-	})
-	smokeEmitter.Size = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.8),
-		NumberSequenceKeypoint.new(1, 2.5),
-	})
-	smokeEmitter.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.4),
-		NumberSequenceKeypoint.new(1, 1),
-	})
-	smokeEmitter.Lifetime = NumberRange.new(0.3, 0.6)
-	smokeEmitter.Rate = 60
-	smokeEmitter.Speed = NumberRange.new(1, 4)
-	smokeEmitter.SpreadAngle = Vector2.new(40, 40)
-	smokeEmitter.LightEmission = 0.3
-	smokeEmitter.Parent = core
-
-	-- Flickering light effect (animate brightness/color)
-	task.spawn(function()
-		local startTick = tick()
-		while core and core.Parent and (tick() - startTick) < lifetime do
-			local flicker = 0.7 + math.random() * 0.6
-			light.Brightness = 2.5 * flicker
-			light.Range = 14 + math.random() * 8
-			glow.Transparency = 0.4 + math.random() * 0.2
-			core.Size = Vector3.new(1.6 + math.random() * 0.4, 1.6 + math.random() * 0.4, 1.6 + math.random() * 0.4)
-			task.wait(0.04)
-		end
-	end)
-
-	game:GetService("Debris"):AddItem(core, lifetime)
-	game:GetService("Debris"):AddItem(glow, lifetime)
+	game:GetService("Debris"):AddItem(part, lifetime)
 end
 
 -- ============================================================
@@ -365,7 +283,7 @@ gameEventEvent.OnClientEvent:Connect(function(eventType, data)
 	elseif eventType == "matchEnd" then
 		screenShake = 15
 		inMatch = false
-		-- Don't set inLobby yet — wait for "enterLobby" from server after teleport
+		-- Don't set inLobby yet ‚Äî wait for "enterLobby" from server after teleport
 	end
 end)
 
