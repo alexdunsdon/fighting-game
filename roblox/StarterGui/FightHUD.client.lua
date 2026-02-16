@@ -191,7 +191,7 @@ local function newButton(props)
 end
 
 -- ============================================================
--- HUD (health bars, timer, rounds) — shown during fights
+-- HUD (health bars, timer, rounds) ‚Äî shown during fights
 -- ============================================================
 local hudFrame = newFrame({
 	size = UDim2.new(1, 0, 0, 80),
@@ -333,7 +333,7 @@ local function updateTokenDisplay()
 end
 
 -- ============================================================
--- LOBBY BANNER (shown in lobby, no overlay — player walks freely)
+-- LOBBY BANNER (shown in lobby, no overlay ‚Äî player walks freely)
 -- ============================================================
 local lobbyBanner = newFrame({
 	size = UDim2.new(0, 500, 0, 50),
@@ -1582,7 +1582,7 @@ gameEventEvent.OnClientEvent:Connect(function(eventType, data)
 		playMenuMusic()
 
 	elseif eventType == "enteredBotZone" then
-		-- Player walked into VS BOT portal — show difficulty popup
+		-- Player walked into VS BOT portal ‚Äî show difficulty popup
 		botPopup.Visible = true
 		queueIndicator.Visible = false
 		shopPopup.Visible = false
@@ -1591,7 +1591,7 @@ gameEventEvent.OnClientEvent:Connect(function(eventType, data)
 		stopQueueAnimation()
 
 	elseif eventType == "queued" then
-		-- Player walked into VS FRIEND portal — show queue indicator
+		-- Player walked into VS FRIEND portal ‚Äî show queue indicator
 		botPopup.Visible = false
 		shopPopup.Visible = false
 		equipPanel.Visible = false
@@ -1605,7 +1605,7 @@ gameEventEvent.OnClientEvent:Connect(function(eventType, data)
 		stopQueueAnimation()
 
 	elseif eventType == "enteredShopZone" then
-		-- Player walked into SHOP portal — show shop popup
+		-- Player walked into SHOP portal ‚Äî show shop popup
 		botPopup.Visible = false
 		queueIndicator.Visible = false
 		equipPanel.Visible = false
@@ -1703,7 +1703,7 @@ gameEventEvent.OnClientEvent:Connect(function(eventType, data)
 end)
 
 -- ============================================================
--- INITIAL STATE — lobby banner visible, everything else hidden
+-- INITIAL STATE ‚Äî lobby banner visible, everything else hidden
 -- ============================================================
 lobbyBanner.Visible = true
 controlsHint.Visible = true

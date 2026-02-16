@@ -6,8 +6,8 @@
 local Config = {}
 
 -- General
-Config.MAX_HEALTH = 100
-Config.ROUND_TIME = 60
+Config.MAX_HEALTH = 200  -- Doubled from 100 for longer battles
+Config.ROUND_TIME = 90  -- Increased from 60 for longer rounds
 Config.ROUNDS_TO_WIN = 2
 Config.COUNTDOWN_TIME = 3
 Config.ROUND_END_DELAY = 3
@@ -21,10 +21,10 @@ Config.ARENA_MAX_X = 50
 Config.GROUND_Y = 3
 
 -- Lobby
-Config.LOBBY_SPAWN = Vector3.new(0, 3, 300)
-Config.ZONE_VS_BOT = Vector3.new(-30, 3, 285)
-Config.ZONE_VS_FRIEND = Vector3.new(30, 3, 285)
-Config.ZONE_SHOP = Vector3.new(0, 3, 265)
+Config.LOBBY_SPAWN = Vector3.new(0, 2, 300)
+Config.ZONE_VS_BOT = Vector3.new(-30, 2, 285)
+Config.ZONE_VS_FRIEND = Vector3.new(30, 2, 285)
+Config.ZONE_SHOP = Vector3.new(0, 2, 265)
 Config.ZONE_RADIUS = 8
 
 -- Token rewards (bot wins only)
